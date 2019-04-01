@@ -3,12 +3,13 @@
 
 
 #include "stdafx.h"
+#include "resource.h"
 #include <iostream>
 #include <Windows.h>
 #include <string>
 #include <chrono>
-
-
+#include <thread>
+#pragma comment(lib,"Winmm.lib")
 
 
 /*
@@ -26,6 +27,9 @@ using namespace std;
 
 string windowName;
 char windowCheck;
+bool willPlay = false;
+int audioDelaySeconds = 0;
+
 
 
 string GetActiveWindowTitle()
@@ -69,16 +73,26 @@ void GetWindow() {
 	}
 }
 
+void AfkAlert() {
+	//Beep(325, 100);
+	int audioWaitTime = 9;
+	while (true) {
+		if (willPlay == true && audioDelaySeconds > audioWaitTime) {
+			PlaySound(MAKEINTRESOURCE(IDR_WAVE1), GetModuleHandle(NULL), SND_RESOURCE);
+			audioDelaySeconds = 0;
+		}
+		audioDelaySeconds++;
+		Sleep(1000);
+	}
+}
 
-
-int main()
-{
+void WatchForClicks() {
 
 	double minutes;
 	int timeCheck = 1;
 	int oldTimeCheck = 0;
 	cout << "Welcome to Jamboni's AFK assistant." << endl << endl;
-	cout << "Used to alert you when you have been inactive in the selected window for the specified time." << endl << endl;
+	cout << "Used to alert you when you have been inactive in the selected window \nfor the specified time." << endl << endl;
 	GetWindow();
 	if (windowCheck == 'N') {
 		GetWindow();
@@ -99,21 +113,36 @@ int main()
 		if (GetActiveWindowTitle() == windowName && (GetKeyState(VK_LBUTTON) & 0x800)) {
 			start = std::chrono::high_resolution_clock::now();
 			oldTimeCheck = 0;
-			//cout << "Click" << endl;
+			willPlay = false;
 		}
 
 		auto end = std::chrono::high_resolution_clock::now();
 		double timeSince = std::chrono::duration_cast<std::chrono::seconds>(end - start).count();
-		if (timeSince >= minutes) {
-			Beep(325, 100);
+		if (timeSince >= minutes) { // If no click do something here
+			willPlay = true;
 		}
 		timeCheck = (int)timeSince;
 		if (timeCheck > oldTimeCheck) {
 			cout << timeSince << ": Seconds since last click." << endl;
 			oldTimeCheck = timeSince;
 		}
-		Sleep(10);
+		Sleep(2);
 	}
 	cin.get();
+}
+
+int main()
+{
+	HWND console = GetConsoleWindow();
+	RECT r;
+	GetWindowRect(console, &r); //stores the console's current dimensions
+
+	MoveWindow(console, r.left, r.top, 600, 250, TRUE); // 800 width, 100 height
+
+
+	thread watchClicks(WatchForClicks);
+	thread playAudio(AfkAlert);
+	watchClicks.join();
+	playAudio.join();
 	return 0;
 }
